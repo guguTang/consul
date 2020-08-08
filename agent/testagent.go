@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/go-hclog"
 	uuid "github.com/hashicorp/go-uuid"
+	"github.com/stretchr/testify/require"
 
 	"github.com/hashicorp/consul/acl"
 	"github.com/hashicorp/consul/agent/config"
@@ -171,28 +172,25 @@ func (a *TestAgent) Start(t *testing.T) (err error) {
 	portsConfig, returnPortsFn := randomPortsSource(a.UseTLS)
 	t.Cleanup(returnPortsFn)
 
-	nodeID := NodeID()
-
-	opts := []AgentOption{
-		WithLogger(logger),
-		WithBuilderOpts(config.BuilderOpts{
-			HCL: []string{
-				TestConfigHCL(nodeID),
-				portsConfig,
-				a.HCL,
-				hclDataDir,
-			},
-		}),
-		WithOverrides(config.FileSource{
-			Name:   "test-overrides",
-			Format: "hcl",
-			Data:   a.Overrides},
+	loader := func(source config.Source) (cfg *config.RuntimeConfig, warnings []string, err error) {
+		opts := config.BuilderOpts{
+			HCL: []string{TestConfigHCL(NodeID()), portsConfig, a.HCL, hclDataDir},
+		}
+		overrides := []config.Source{
+			config.FileSource{
+				Name:   "test-overrides",
+				Format: "hcl",
+				Data:   a.Overrides},
 			config.DefaultConsulSource(),
 			config.DevConsulSource(),
-		),
+		}
+		return config.Load(opts, source, overrides...)
 	}
+	bd, err := NewBaseDeps(loader, logOutput)
+	require.NoError(t, err)
 
-	agent, err := New(opts...)
+	bd.Logger = logger
+	agent, err := New(bd)
 	if err != nil {
 		return fmt.Errorf("Error creating agent: %s", err)
 	}
