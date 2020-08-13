@@ -159,6 +159,7 @@ func TestUiNodeInfo(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 
+	require.Equal(t, resp.Code, 200)
 	assertIndex(t, resp)
 
 	// Should be 1 node for the server
